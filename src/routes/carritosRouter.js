@@ -14,7 +14,7 @@ router.get("/", async (req, res) => {
         let carritos = await cartManager.getCarts()
         res.setHeader("content-Type", "application/json");
         return res.status(200).json({ carritos });
-        
+
     } catch (error) {
         return res.status(500).send(`Error: ${error.message}`)
 
@@ -40,12 +40,13 @@ router.get('/:cid', async (req, res) => {
         return res.status(400).json({ error: "Indique un id válido de MongoDB" })
     }
 
+    let carrito = await cartManager.getCartsBy({ _id: cid })
+    if (!carrito) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(400).json({ error: `No existen Carritos con id: ${cid}` })
+    }
+
     try {
-        let carrito = await cartManager.getCartsBy({ _id: cid })
-        if (!carrito) {
-            res.setHeader('Content-Type', 'application/json');
-            return res.status(400).json({ error: `No existen Carritos con id: ${cid}` })
-        }
         res.setHeader('Content-Type', 'application/json');
         return res.status(200).json({ carrito });
     } catch (error) {
@@ -84,13 +85,12 @@ router.delete("/:cid", async (req, res) => {
     }
 });
 
-//PUT /:cid
+//PUT MODIFICADO
 router.put("/:cid", async (req, res) => {
     const { cid } = req.params;
     const productos = req.body;
 
     if (!isValidObjectId(cid)) {
-        res.setHeader("Content-Type", "application/json");
         return res.status(400).json({ error: "Indique un id válido de MongoDB para el carrito (cid)." });
     }
 
@@ -98,44 +98,42 @@ router.put("/:cid", async (req, res) => {
         return res.status(400).json({ error: "El cuerpo de la solicitud debe ser un array de productos." });
     }
 
+    const uniqueProducts = new Set();
     for (let producto of productos) {
         const { product, quantity } = producto;
 
         if (!isValidObjectId(product)) {
-            return res.status(400).json({ error: `El id del producto ${product} no es válido.` });
+            return res.status(400).json({ error: "Indique un id válido de MongoDB para el producto (pid)." });
         }
 
         if (typeof quantity !== "number" || quantity <= 0) {
             return res.status(400).json({ error: `La cantidad del producto ${product} debe ser un número positivo.` });
         }
+
+        const productoExiste = await ProductManager.getProductsBy({ _id: product });
+        if (!productoExiste) {
+            return res.status(400).json({ error: `El producto con id ${product} no existe en la base de datos.` });
+        }
+
+        if (uniqueProducts.has(product)) {
+            return res.status(400).json({ error: `El producto con id ${product} está duplicado en la solicitud.` });
+        }
+        uniqueProducts.add(product);
     }
 
     try {
         let carritoId = await cartManager.getCartsBy({ _id: cid });
         if (!carritoId) {
-            res.setHeader("Content-Type", "application/json");
             return res.status(400).json({ error: `No existen carritos con el id: ${cid}` });
         }
 
-        for (let producto of productos) {
-            const { product, quantity } = producto;
+        carritoId.products = productos;
 
-            const productoEnCarrito = carritoId.products.find(p => p.product._id.toString() === product);
-            if (productoEnCarrito) {
+        await carritoModelo.findByIdAndUpdate(cid, { products: carritoId.products }, { new: true });
 
-                productoEnCarrito.quantity = quantity;
-            } else {
-                carritoId.products.push({ product, quantity });
-            }
-        }
-
-        await carritoModelo.findByIdAndUpdate(cid, { products: carritoId.products });
-
-        res.setHeader("Content-Type", "application/json");
         return res.status(200).json({ message: "Productos del carrito actualizados exitosamente", carrito: carritoId });
     } catch (error) {
         console.error("Error al actualizar los productos del carrito:", error);
-        res.setHeader("Content-Type", "application/json");
         return res.status(500).json({ error: "Error interno del servidor", detalles: error.message });
     }
 });
@@ -156,20 +154,19 @@ router.post("/:cid/products/:pid", async (req, res) => {
         return res.status(400).json({ error: "Indique un id válido de MongoDB para el producto (pid)." });
     }
 
+    let carritoId = await cartManager.getCartsBy({ _id: cid });
+    if (!carritoId) {
+        res.setHeader("Content-Type", "application/json");
+        return res.status(400).json({ error: `No existen carritos con el id: ${cid}` });
+    }
+
+    let producto = await ProductManager.getProductsBy({ _id: pid });
+    if (!producto) {
+        res.setHeader("Content-Type", "application/json");
+        return res.status(400).json({ error: `No existen productos con el id: ${pid}` });
+    }
+
     try {
-
-        let carritoId = await cartManager.getCartsBy({ _id: cid });
-        if (!carritoId) {
-            res.setHeader("Content-Type", "application/json");
-            return res.status(400).json({ error: `No existen carritos con el id: ${cid}` });
-        }
-
-        let producto = await ProductManager.getProductsBy({ _id: pid });
-        if (!producto) {
-            res.setHeader("Content-Type", "application/json");
-            return res.status(400).json({ error: `No existen productos con el id: ${pid}` });
-        }
-
         const productoEnCarrito = carritoId.products.find(p => p.product._id == pid);
 
         if (productoEnCarrito) {
@@ -205,17 +202,24 @@ router.delete("/:cid/products/:pid", async (req, res) => {
         return res.status(400).json({ error: "Indique un id válido de MongoDB para el producto (pid)." });
     }
 
-    try {
-        const carrito = await cartManager.getCartsBy({ _id: cid });
-        if (!carrito) {
-            res.setHeader("Content-Type", "application/json");
-            return res.status(400).json({ error: `No existen carritos con el id: ${cid}` });
-        }
+    // Validar que el producto existe en la base de datos
+    const productoExiste = await ProductManager.getProductsBy({ _id: pid });
+    if (!productoExiste) {
+        return res.status(400).json({ error: `El producto con id ${pid} no existe en la base de datos.` });
+    }
 
-        const productoEnCarrito = carrito.products.find(p => p.product._id == pid);
-        if (!productoEnCarrito) {
-            return res.status(404).json({ error: `El producto con id: ${pid} no está en el carrito.` });
-        }
+    const carrito = await cartManager.getCartsBy({ _id: cid });
+    if (!carrito) {
+        res.setHeader("Content-Type", "application/json");
+        return res.status(400).json({ error: `No existen carritos con el id: ${cid}` });
+    }
+
+    const productoEnCarrito = carrito.products.find(p => p.product._id == pid);
+    if (!productoEnCarrito) {
+        return res.status(404).json({ error: `El producto con id: ${pid} no está en el carrito.` });
+    }
+    
+    try {
 
         if (productoEnCarrito.quantity > 1) {
             productoEnCarrito.quantity -= 1;
@@ -244,7 +248,6 @@ router.delete("/:cid/products/:pid", async (req, res) => {
         }
     } catch (error) {
         console.error("Error al ajustar/eliminar el producto del carrito:", error);
-        res.setHeader("Content-Type", "application/json");
         return res.status(500).json({ error: "Error interno del servidor", detalles: error.message });
     }
 });

@@ -7,17 +7,37 @@ export const router = Router()
 console.log("Ruta de productos: Activa")
 
 router.get("/", async (req, res) => {
-    let { page, limit } = req.query
+    let { page, limit, sort, query } = req.query
 
     try {
         page = parseInt(page)
         limit = parseInt(limit)
 
-        const productos = await ProductManager.getProductsPag(page, limit);
+        let sortOpciones = {}
+        if (sort === "priceAsc") {
+            sortOpciones = { price: 1 }
+        } else if (sort === "priceDesc") {
+            sortOpciones = { price: -1 }
+        }
+
+        //
+        const categoriasExistentes = await ProductManager.getCategories()
+
+        let filterOpciones = {}
+        if (query) {
+            if (categoriasExistentes.includes(query)){
+                filterOpciones = {category: query}
+            }else
+            return res.status(400).json({
+                status: "error", message: `Categoría "${query}" no encontrada`
+            })
+        }
+        //
+        const productos = await ProductManager.getProductsPag(page, limit, sortOpciones, filterOpciones);
 
         const response = {
             status: "success",
-            payload: productos.docs, 
+            payload: productos.docs,
             totalPages: productos.totalPages,
             prevPage: productos.prevPage,
             nextPage: productos.nextPage,
@@ -46,13 +66,14 @@ router.get("/:pid", async (req, res) => {
         res.setHeader('Content-Type', 'application/json')
         return res.status(400).json({ error: "Indique un id válido de MongoDB" })
     }
-
+    
+    let producto = await ProductManager.getProductsBy({ _id: id })
+    if (!producto) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(400).json({ error: `No existen Productos con id: ${id}` })
+    }
+    
     try {
-        let producto = await ProductManager.getProductsBy({ _id: id })
-        if (!producto) {
-            res.setHeader('Content-Type', 'application/json');
-            return res.status(400).json({ error: `No existen Productos con id: ${id}` })
-        }
         res.setHeader('Content-Type', 'application/json');
         return res.status(200).json({ producto });
     } catch (error) {
@@ -63,11 +84,11 @@ router.get("/:pid", async (req, res) => {
 
 
 router.post("/", async (req, res) => {
-    let { title, id, description, code, price, status, stock, category, ...otros } = req.body;
+    let { title, id, _id, description, code, price, status, stock, category, ...otros } = req.body;
     // ... operador "rest"
-    if (id) {
-        return res.status(400).send({ message: "El id no debe ser indicado." });
-    }
+
+    if (id || _id) { return res.status(400).send({ message: "El id no debe ser indicado." }); }
+
     if (!title) {
         return res.status(400).send({ message: `title es requerido.` })
     }
@@ -89,13 +110,15 @@ router.post("/", async (req, res) => {
     if (!status) {
         return res.status(400).send({ message: "El status es requerido." });
     }
+    
+    let productos = await ProductManager.getProducts()
+    let productoExistente = productos.find(producto => producto.code === code);
+    if (productoExistente) {
+        return res.status(400).send({ message: `Ya existe un producto con el código ${code} en la DB. Intenta con otro.` });
+    }
+    
     try {
 
-        let productos = await ProductManager.getProducts()
-        let productoExistente = productos.find(producto => producto.code === code);
-        if (productoExistente) {
-            return res.status(400).send({ message: `Ya existe un producto con el código ${code} en la DB. Intenta con otro.` });
-        }
 
         let nuevoProducto = await ProductManager.addProduct({ title, description, code, price, status, stock, category, ...otros })
 
@@ -118,6 +141,12 @@ router.put("/:pid", async (req, res) => {
     if (!isValidObjectId(id)) {
         res.setHeader('Content-Type', 'application/json')
         return res.status(400).json({ error: "Indique un id válido de MongoDB" })
+    }
+
+    let producto = await ProductManager.getProductsBy({ _id: id })
+    if (!producto) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(400).json({ error: `No existen Productos con id: ${id}` })
     }
 
     let { ...aModificar } = req.body
@@ -148,6 +177,12 @@ router.delete("/:pid", async (req, res) => {
     if (!isValidObjectId(id)) {
         res.setHeader('Content-Type', 'application/json')
         return res.status(400).json({ error: "Indique un id válido de MongoDB" })
+    }
+
+    let producto = await ProductManager.getProductsBy({ _id: id })
+    if (!producto) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(400).json({ error: `No existen Productos con id: ${id}` })
     }
 
     try {

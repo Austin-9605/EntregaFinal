@@ -6,11 +6,31 @@ export const router = Router()
 
 
 router.get("/products", async (req, res) => {
+    let { page, limit, sort, query } = req.query
+
     try {
-        let { page, limit } = req.query
+        
+        let sortOpciones = {}
+        if (sort === "priceAsc") {
+            sortOpciones = { price: 1 }
+        } else if (sort === "priceDesc") {
+            sortOpciones = { price: -1 }
+        }
 
-        let { docs: products, totalPages, hasNextPage, hasPrevPage, prevPage, nextPage } = await ProductManager.getProductsPag(page, limit)
+        const categoriasExistentes = await ProductManager.getCategories()
 
+        let filterOpciones = {}
+        if (query) {
+            if (categoriasExistentes.includes(query)){
+                filterOpciones = {category: query}
+            }else
+            return res.status(400).json({
+                status: "error", message: `Categoría "${query}" no encontrada`
+            })
+        }
+        
+        
+        let { docs: products, totalPages, hasNextPage, hasPrevPage, prevPage, nextPage } = await ProductManager.getProductsPag(page, limit, sortOpciones, filterOpciones)
         let carritos = await cartManager.getCarts()
 
         res.render("index", {

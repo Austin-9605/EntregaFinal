@@ -4,17 +4,37 @@ console.log("Cargando clase ProductMongoManager")
 export class ProductMongoManager {
 
     //get
-    static async getProductsPag(page=1, limit=10) {
-        return await productoModelo.paginate(
-            {},
-            {page, limit, lean:true, sort:{price: 1}}
-        )
+    static async getProductsPag(page = 1, limit = 10, sort = {}, filter = {}) {
+        try {
+            
+            page = Math.max(1, parseInt(page));
+            limit = Math.max(1, parseInt(limit));
 
+            return await productoModelo.paginate(
+                filter,
+                { page, limit, lean: true, sort}
+            );
+        } catch (error) {
+            console.error("Error al obtener productos paginados:", error);
+            throw error;
+        }
     }
 
-    static async getProducts(){
+////
+static async getCategories(){
+    try {
+        const categories = await productoModelo.distinct("category");
+        return categories
+    } catch (error) {
+        console.error("Error al obtener categorías:", error); 
+        throw error
+    }
+}
+////
+
+    static async getProducts() {
         return await productoModelo.find().lean()
-        
+
 
     }
 
