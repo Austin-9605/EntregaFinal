@@ -11,7 +11,7 @@ Filtra productos por categoría. Acepta categorías existentes y por crear.
 Actualmente las categorías son: Escritura, Papeleria, Organizacion, Accesorios, Tecnologia y Herramientas.
 ej. de implementacion
 
-query=Escritura (devuelve todos los productos con categoria "Escritura")
+- query=Escritura (devuelve todos los productos con categoria "Escritura")
 
 ----
 
