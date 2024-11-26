@@ -17,11 +17,11 @@ query=Escritura (devuelve todos los productos con categoria "Escritura")
 
 Ruta de Carrito METODO PUT "/api/carts/:cid/"
 Realizadas las validaciones pertinentes. Exige que la insercion de datos por body sea de un array de objetos.
-ej de insercion.
+ej. de insercion válido.
 
 [{
 "product": "(_id del producto válido/existente en MongoDB)",
-"quantity: 5
+"quantity": 5
 }]
 
 
